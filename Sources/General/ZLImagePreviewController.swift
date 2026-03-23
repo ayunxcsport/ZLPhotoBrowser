@@ -557,25 +557,20 @@ public class ZLImagePreviewController: UIViewController {
                 DispatchQueue.main.async {
                     guard let self = self,
                           let localURL = localURL,
-                          error == nil else {
+                          error == nil,
+                          let data = try? Data(contentsOf: localURL) else {
                         hud.hide()
                         showAlertView("保存失败", self)
                         return
                     }
                     
-                    do {
-                        let data = try Data(contentsOf: localURL)
-                        ZLPhotoManager.saveImageDataToAlbum(data: data) { error, _ in
-                            hud.hide()
-                            if error != nil {
-                                showAlertView("保存失败", self)
-                            } else {
-                                showAlertView("保存成功", self)
-                            }
-                        }
-                    } catch {
+                    ZLPhotoManager.saveImageDataToAlbum(data: data) { error, _ in
                         hud.hide()
-                        showAlertView("保存失败", self)
+                        if error != nil {
+                            showAlertView("保存失败", self)
+                        } else {
+                            showAlertView("保存成功", self)
+                        }
                     }
                 }
             }
@@ -624,9 +619,6 @@ public class ZLImagePreviewController: UIViewController {
                     }
                 }
             }
-        } else {
-            hud.hide()
-            showAlertView("保存失败", self)
         }
     }
     
@@ -828,23 +820,18 @@ extension ZLImagePreviewController: UICollectionViewDataSource, UICollectionView
                     ZLMainAsync {
                         zl_debugPrint("---- localURL: \(String(describing: localURL))")
                         guard let localURL,
-                              error == nil else {
+                              error == nil,
+                              let data = try? Data(contentsOf: localURL) else {
                             hud.hide()
                             showAlertView(localLanguageTextValue(.saveVideoError), self)
                             return
                         }
                         
-                        do {
-                            let data = try Data(contentsOf: localURL)
-                            ZLPhotoManager.saveImageDataToAlbum(data: data) { error, _ in
-                                hud.hide()
-                                if error != nil {
-                                    showAlertView(localLanguageTextValue(.saveImageError), self)
-                                }
-                            }
-                        } catch {
+                        ZLPhotoManager.saveImageDataToAlbum(data: data) { error, _ in
                             hud.hide()
-                            showAlertView(localLanguageTextValue(.saveImageError), self)
+                            if error != nil {
+                                showAlertView(localLanguageTextValue(.saveImageError), self)
+                            }
                         }
                     }
                 }
@@ -902,7 +889,7 @@ extension ZLImagePreviewController: UICollectionViewDataSource, UICollectionView
                     if info?[PHImageErrorKey] as? Error != nil {
                         hud.hide()
                         showAlertView(localLanguageTextValue(.saveImageError), self)
-                    } else if !isDegraded, let data = data {
+                    } else if !isDegraded {
                         ZLPhotoManager.saveImageDataToAlbum(data: data) { error, _ in
                             hud.hide()
                             if error != nil {
