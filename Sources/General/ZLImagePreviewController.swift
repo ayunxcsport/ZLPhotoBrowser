@@ -58,6 +58,8 @@ public class ZLImagePreviewController: UIViewController {
     private let showSelectBtn: Bool
     
     private let showBottomView: Bool
+    
+    private let showSaveBtn: Bool  // 新增：是否显示保存按钮
 
     public private(set) var currentIndex: Int
     
@@ -130,6 +132,23 @@ public class ZLImagePreviewController: UIViewController {
         return btn
     }()
     
+    // MARK: - 新增保存按钮
+    private lazy var saveBtn: ZLEnlargeButton = {
+        let btn = ZLEnlargeButton(type: .custom)
+        if #available(iOS 13.0, *) {
+            let image = UIImage(systemName: "arrow.down.circle")
+            btn.setImage(image, for: .normal)
+            btn.tintColor = .white
+        } else {
+            btn.setTitle("保存", for: .normal)
+            btn.titleLabel?.font = .systemFont(ofSize: 14)
+            btn.setTitleColor(.white, for: .normal)
+        }
+        btn.enlargeInset = 10
+        btn.addTarget(self, action: #selector(saveBtnClick), for: .touchUpInside)
+        return btn
+    }()
+    
     private lazy var bottomView: UIView = {
         let view = UIView()
         view.backgroundColor = .zl.bottomToolViewBgColorOfPreviewVC
@@ -197,8 +216,10 @@ public class ZLImagePreviewController: UIViewController {
     
     /// - Parameters:
     ///   - datas: Must be one of PHAsset, UIImage and URL, will filter others in init function.
-    ///   - showBottomView: If showSelectBtn is true, showBottomView is always true.
     ///   - index: Index for first display.
+    ///   - showSelectBtn: 是否显示选择按钮
+    ///   - showBottomView: 是否显示底部视图
+    ///   - showSaveBtn: 是否显示保存按钮（新增）
     ///   - urlType: Tell me the url is image or video.
     ///   - urlImageLoader: Called when cell will display, cell will layout after callback when image load finish. The first block is progress callback, second is load finish callback.
     @objc public init(
@@ -206,6 +227,7 @@ public class ZLImagePreviewController: UIViewController {
         index: Int = 0,
         showSelectBtn: Bool = true,
         showBottomView: Bool = true,
+        showSaveBtn: Bool = false,
         urlType: ((URL) -> ZLURLType)? = nil,
         urlImageLoader: ZLImageLoaderBlock? = nil
     ) {
@@ -216,6 +238,7 @@ public class ZLImagePreviewController: UIViewController {
         indexBeforOrientationChanged = currentIndex
         self.showSelectBtn = showSelectBtn
         self.showBottomView = showSelectBtn ? true : showBottomView
+        self.showSaveBtn = showSaveBtn
         self.urlType = urlType
         self.urlImageLoader = urlImageLoader
         super.init(nibName: nil, bundle: nil)
@@ -275,12 +298,38 @@ public class ZLImagePreviewController: UIViewController {
         
         indexLabel.frame = CGRect(x: (view.zl.width - 80) / 2, y: insets.top, width: 80, height: 44)
         
+        let buttonSize: CGFloat = 25
+        let spacing: CGFloat = 12
+        
         if isRTL() {
             backBtn.frame = CGRect(x: view.zl.width - insets.right - 60, y: insets.top, width: 60, height: 44)
-            selectBtn.frame = CGRect(x: insets.left + 15, y: insets.top + (44 - 25) / 2, width: 25, height: 25)
+            selectBtn.frame = CGRect(x: insets.left + 15, y: insets.top + (44 - buttonSize) / 2, width: buttonSize, height: buttonSize)
+            
+            if showSaveBtn {
+                saveBtn.frame = CGRect(
+                    x: selectBtn.frame.maxX + spacing,
+                    y: insets.top + (44 - buttonSize) / 2,
+                    width: buttonSize,
+                    height: buttonSize
+                )
+            }
         } else {
             backBtn.frame = CGRect(x: insets.left, y: insets.top, width: 60, height: 44)
-            selectBtn.frame = CGRect(x: view.zl.width - 40 - insets.right, y: insets.top + (44 - 25) / 2, width: 25, height: 25)
+            selectBtn.frame = CGRect(
+                x: view.zl.width - buttonSize - insets.right - 15,
+                y: insets.top + (44 - buttonSize) / 2,
+                width: buttonSize,
+                height: buttonSize
+            )
+            
+            if showSaveBtn {
+                saveBtn.frame = CGRect(
+                    x: selectBtn.frame.minX - spacing - buttonSize,
+                    y: insets.top + (44 - buttonSize) / 2,
+                    width: buttonSize,
+                    height: buttonSize
+                )
+            }
         }
         
         let bottomViewH = ZLLayout.bottomToolViewH
@@ -336,6 +385,11 @@ public class ZLImagePreviewController: UIViewController {
         navView.addSubview(backBtn)
         navView.addSubview(indexLabel)
         navView.addSubview(selectBtn)
+        
+        if showSaveBtn {
+            navView.addSubview(saveBtn)
+        }
+        
         view.addSubview(collectionView)
         view.addSubview(bottomView)
         
@@ -487,6 +541,85 @@ public class ZLImagePreviewController: UIViewController {
         }
         
         dismiss()
+    }
+    
+    // MARK: - 新增保存按钮点击方法
+    @objc private func saveBtnClick() {
+        let currentMedia = datas[currentIndex]
+        
+        let hud = ZLProgressHUD.show(toast: .processing)
+        
+        // 保存图片到相册
+        if let url = currentMedia as? URL {
+            // 网络图片需要先下载
+            urlDownloadTask?.cancel()
+            urlDownloadTask = URLSession.shared.downloadTask(with: url) { [weak self] localURL, _, error in
+                DispatchQueue.main.async {
+                    guard let self = self,
+                          let localURL = localURL,
+                          error == nil,
+                          let data = try? Data(contentsOf: localURL) else {
+                        hud.hide()
+                        showAlertView("保存失败", self)
+                        return
+                    }
+                    
+                    ZLPhotoManager.saveImageDataToAlbum(data: data) { error, _ in
+                        hud.hide()
+                        if error != nil {
+                            showAlertView("保存失败", self)
+                        } else {
+                            showAlertView("保存成功", self)
+                        }
+                    }
+                }
+            }
+            urlDownloadTask?.resume()
+        } else if let image = currentMedia as? UIImage {
+            ZLPhotoManager.saveImageToAlbum(image: image) { error, _ in
+                hud.hide()
+                if error != nil {
+                    showAlertView("保存失败", self)
+                } else {
+                    showAlertView("保存成功", self)
+                }
+            }
+        } else if let asset = currentMedia as? PHAsset {
+            if asset.mediaType == .image {
+                imageRequestID = ZLPhotoManager.fetchOriginalImageData(for: asset) { [weak self] data, _, isDegraded in
+                    guard let self = self, !isDegraded, let data = data else { return }
+                    ZLPhotoManager.saveImageDataToAlbum(data: data) { error, _ in
+                        hud.hide()
+                        if error != nil {
+                            showAlertView("保存失败", self)
+                        } else {
+                            showAlertView("保存成功", self)
+                        }
+                    }
+                }
+            } else if asset.mediaType == .video {
+                let fileURL = URL(fileURLWithPath: NSTemporaryDirectory())
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension("mp4")
+                ZLPhotoManager.saveAsset(asset, toFile: fileURL) { [weak self] error in
+                    guard let self = self else { return }
+                    if error != nil {
+                        hud.hide()
+                        showAlertView("保存失败", self)
+                    } else {
+                        ZLPhotoManager.saveVideoToAlbum(url: fileURL) { error, _ in
+                            hud.hide()
+                            try? FileManager.default.removeItem(at: fileURL)
+                            if error != nil {
+                                showAlertView("保存失败", self)
+                            } else {
+                                showAlertView("保存成功", self)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
     
     private func tapPreviewCell() {
