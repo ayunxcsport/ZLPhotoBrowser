@@ -137,11 +137,13 @@ public class ZLImagePreviewController: UIViewController {
         let btn = ZLEnlargeButton(type: .custom)
         if #available(iOS 13.0, *) {
             let image = UIImage(systemName: "arrow.down.circle")
-            btn.setImage(image, for: .normal)
+            // 调整图标大小
+            let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+            btn.setImage(image?.withConfiguration(config), for: .normal)
             btn.tintColor = .white
         } else {
             btn.setTitle("保存", for: .normal)
-            btn.titleLabel?.font = .systemFont(ofSize: 14)
+            btn.titleLabel?.font = .systemFont(ofSize: 16)
             btn.setTitleColor(.white, for: .normal)
         }
         btn.enlargeInset = 10
@@ -298,7 +300,7 @@ public class ZLImagePreviewController: UIViewController {
         
         indexLabel.frame = CGRect(x: (view.zl.width - 80) / 2, y: insets.top, width: 80, height: 44)
         
-        let buttonSize: CGFloat = 25
+        let buttonSize: CGFloat = 36
         let spacing: CGFloat = 12
         
         if isRTL() {
@@ -594,9 +596,8 @@ public class ZLImagePreviewController: UIViewController {
                 imageRequestID = ZLPhotoManager.fetchOriginalImageData(for: asset) { [weak self] data, _, isDegraded in
                     guard let self = self else { return }
                     guard !isDegraded else { return }
-                    guard let imageData = data else { return }
                     
-                    ZLPhotoManager.saveImageDataToAlbum(data: imageData) { error, _ in
+                    ZLPhotoManager.saveImageDataToAlbum(data: data) { error, _ in
                         hud.hide()
                         if error != nil {
                             showAlertView("保存失败", self)
@@ -906,8 +907,7 @@ extension ZLImagePreviewController: UICollectionViewDataSource, UICollectionView
                         hud.hide()
                         showAlertView(localLanguageTextValue(.saveImageError), self)
                     } else if !isDegraded {
-                        guard let imageData = data else { return }
-                        ZLPhotoManager.saveImageDataToAlbum(data: imageData) { error, _ in
+                        ZLPhotoManager.saveImageDataToAlbum(data: data) { error, _ in
                             hud.hide()
                             if error != nil {
                                 showAlertView(localLanguageTextValue(.saveImageError), self)
@@ -956,3 +956,4 @@ extension ZLImagePreviewController: UICollectionViewDataSource, UICollectionView
         PHImageManager.default().cancelImageRequest(imageRequestID)
     }
 }
+
